@@ -39,6 +39,11 @@ class Config
     private $cacheTypeList;
 
     /**
+     * @var array
+     */
+    private $activeCatalogSyncWebsites;
+
+    /**
      * @method __construct
      * @param StoreManagerInterface $storeManager
      * @param ScopeConfigInterface $scopeConfig
@@ -107,9 +112,97 @@ class Config
     /**
      * @return bool
      */
-    public function isActiveCatalogSync()
+    public function isActiveCatalogSync($storeId = null)
     {
-        return $this->scopeConfig->isSetFlag(self::XML_PATH_FACEBOOK_CATALOG_SYNC_IS_ACTIVE);
+        return $this->scopeConfig->isSetFlag(
+            self::XML_PATH_FACEBOOK_CATALOG_SYNC_IS_ACTIVE,
+            ScopeConfigInterface::SCOPE_TYPE_DEFAULT,
+            $storeId
+        );
+    }
+
+    /**
+     * @return array
+     */
+    public function getActiveCatalogSyncWebsites()
+    {
+        if (null !== $this->activeCatalogSyncWebsites) {
+            return $this->activeCatalogSyncWebsites;
+        }
+
+        $this->activeCatalogSyncWebsites = [];
+
+        $objectManager = \Magento\Framework\App\ObjectManager::getInstance();
+        $storeManager = $objectManager->get(\Magento\Store\Model\StoreManagerInterface::class);
+        foreach ($storeManager->getWebsites() as $website) {
+            $store = $website->getDefaultStore();
+            if ($this->isActiveCatalogSync($store->getId())) {
+                $this->activeCatalogSyncWebsites[] = $website->getId();
+            }
+        }
+        return $this->activeCatalogSyncWebsites;
+    }
+
+    /**
+     * @param $product
+     * @return bool
+     */
+    public function isActiveCatalogSyncForProduct($product)
+    {
+        $activeCatalogSyncWebsites = $this->getActiveCatalogSyncWebsites();
+        if (!$activeCatalogSyncWebsites) {
+            return false;
+        }
+
+        $objectManager = \Magento\Framework\App\ObjectManager::getInstance();
+        $storeManager = $objectManager->get(\Magento\Store\Model\StoreManagerInterface::class);
+
+        $isActiveCatalogSync = false;
+
+        $categories = $product->getAvailableInCategories();
+        $websiteIds = $product->getWebsiteIds();
+
+        if ($categories) {
+            foreach ($storeManager->getWebsites() as $website) {
+
+                $store = $website->getDefaultStore();
+                if (!$this->isActiveCatalogSync($store->getId())) {
+                    continue;
+                }
+
+                if (!in_array($website->getId(), $websiteIds)) {
+                    continue;
+                }
+
+                foreach ($categories as $categoryId) {
+                    try {
+                        $category = $objectManager->get(\Magento\Catalog\Api\CategoryRepositoryInterface::class)
+                            ->get($categoryId, $store->getId());
+                    } catch (\Exception $e) {
+                        continue;
+                    }
+
+                    $rootCategoryId = $store->getRootCategoryId();
+
+                    if ($category->getIsActive()
+                        && $category->getLevel() > 1
+                        && $category->getData("sync_to_facebook_catalog")
+                        && in_array($rootCategoryId, $category->getPathIds())
+                        && !$category->hasChildren()
+                    ) {
+                        $isActiveCatalogSync = true;
+                        break 2;
+                    }
+                }
+            }
+        } else {
+            $activeCatalogSyncWebsites = $this->getActiveCatalogSyncWebsites();
+            if (array_intersect($websiteIds, $activeCatalogSyncWebsites)) {
+                $isActiveCatalogSync = true;
+            }
+        }
+
+        return $isActiveCatalogSync;
     }
 
     /**

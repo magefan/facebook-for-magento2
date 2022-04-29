@@ -51,14 +51,21 @@ class Configurable implements ProductRetrieverInterface
      */
     public function retrieve($offset = 1, $limit = self::LIMIT): array
     {
-        $storeId = $this->fbeHelper->getStore()->getId();
+        //$storeId = $this->fbeHelper->getStore()->getId();
+        $websiteIds = $this->fbeHelper->getObject(
+            \Facebook\BusinessExtension\Model\System\Config::class
+        )->getActiveCatalogSyncWebsites();
+        if (!$websiteIds) {
+            return [];
+        }
 
         $configurableCollection = $this->productCollectionFactory->create();
         $configurableCollection->addAttributeToSelect('*')
             ->addAttributeToFilter('status', Status::STATUS_ENABLED)
             ->addAttributeToFilter('visibility', ['neq' => Visibility::VISIBILITY_NOT_VISIBLE])
             ->addAttributeToFilter('type_id', $this->getProductType())
-            ->setStoreId($storeId);
+            //->setStoreId($storeId);
+            ->addWebsiteFilter($websiteIds);
 
         $configurableCollection->getSelect()->limit($limit, $offset);
 

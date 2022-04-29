@@ -19,7 +19,7 @@
                     <label>Push All Categories to Facebook Catalog</label>
                     <frontend_model>Facebook\BusinessExtension\Block\Adminhtml\System\Config\CategoryFeed</frontend_model>
                 </field>
-                <field id="catalog_sync" translate="label comment" type="select" sortOrder="100" showInDefault="1" showInWebsite="1" showInStore="1">
+                <field id="catalog_sync" translate="label comment" type="select" sortOrder="100" showInDefault="1" showInWebsite="1" showInStore="0">
                     <label>Enable Catalog Sync</label>
                     <config_path>facebook/catalog_management/catalog_sync</config_path>
                     <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>

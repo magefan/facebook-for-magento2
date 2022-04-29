@@ -50,17 +50,25 @@ class Simple implements ProductRetrieverInterface
      */
     public function retrieve($offset = 1, $limit = self::LIMIT): array
     {
-        $storeId = $this->fbeHelper->getStore()->getId();
+        //$storeId = $this->fbeHelper->getStore()->getId();
+
+        $websiteIds = $this->fbeHelper->getObject(
+            \Facebook\BusinessExtension\Model\System\Config::class
+        )->getActiveCatalogSyncWebsites();
+        if (!$websiteIds) {
+            return [];
+        }
 
         $collection = $this->productCollectionFactory->create();
         $collection->addAttributeToSelect('*')
             ->addAttributeToFilter('status', Status::STATUS_ENABLED)
             ->addAttributeToFilter('visibility', ['neq' => Visibility::VISIBILITY_NOT_VISIBLE])
-            ->addAttributeToFilter('type_id', $this->getProductType())
-            ->setStoreId($storeId);
+            ->addAttributeToFilter('type_id', ['in' => [$this->getProductType(), 'virtual', 'downloadable']])
+            //->setStoreId($storeId);
+            ->addWebsiteFilter($websiteIds);
 
         $collection
-            ->getSelect()->joinLeft(['l' => 'catalog_product_super_link'], 'e.entity_id = l.product_id')
+            ->getSelect()->joinLeft(['l' => $collection->getTable('catalog_product_super_link')], 'e.entity_id = l.product_id')
             ->where('l.product_id IS NULL')
             ->order(new \Zend_Db_Expr('e.updated_at desc'))
             ->limit($limit, $offset);

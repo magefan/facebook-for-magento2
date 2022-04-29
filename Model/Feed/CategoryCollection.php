@@ -41,6 +41,11 @@ class CategoryCollection
     private $httpClient;
 
     /**
+     * @var array
+     */
+    private $categoryProductIds;
+
+    /**
      * @var \Magento\Store\Model\StoreManagerInterface
      */
     protected $_storeManager;
@@ -250,16 +255,39 @@ class CategoryCollection
         $this->fbeHelper->log("pushing all categories to fb collections");
         $categories = $this->getAllActiveCategories();
         foreach ($categories as $category) {
-            $syncEnabled =$category->getData("sync_to_facebook_catalog");
+            $syncEnabled = $category->getData("sync_to_facebook_catalog");
             if ($syncEnabled === "0") {
                 $this->fbeHelper->log("user disabled category sync ".$category->getName());
                 continue;
             }
+
+            if (!$this->getCategoryProductIds($category)) {
+                $this->fbeHelper->log("Category does not have products ".$category->getName());
+                continue;
+            }
+
             $this->fbeHelper->log("user enabled category sync ".$category->getName());
             $set_id = $this->getFBProductSetID($category);
             $this->fbeHelper->log("setid for it is:". (string)$set_id);
             if ($set_id) {
                 $response = $this->updateCategoryWithFB($category, $set_id);
+
+                /*
+                try {
+                    $decodedResponse = json_decode($response, true);
+                } catch (\Exception $e) {
+                    $decodedResponse = [];
+                }
+
+                if (isset($decodedResponse['error']) && isset($decodedResponse['error']['error_subcode']) && $decodedResponse['error']['error_subcode'] == 33) {
+                    if (!$category->hasChildren()) {
+                        $response = $this->pushNewCategoryToFB($category);
+                        $resArray[] = $response;
+                    }
+                }
+                */
+
+
                 $resArray[] = $response;
                 continue;
             }
@@ -311,6 +339,36 @@ class CategoryCollection
         return $response;
     }
 
+    public function getCategoryProductIds(Category $category)
+    {
+        if (!isset($this->categoryProductIds[$category->getId()])) {
+            $product_collection = $this->productCollectionFactory->create();
+            $product_collection->addAttributeToSelect('sku');
+            $product_collection->distinct(true);
+            $product_collection->addCategoriesFilter(['eq' => $category->getId()]);
+
+            $websiteIds = $this->fbeHelper->getObject(\Facebook\BusinessExtension\Model\System\Config::class)->getActiveCatalogSyncWebsites();
+            if ($websiteIds) {
+                $product_collection->addWebsiteFilter($websiteIds);
+
+                $product_collection->getSelect()->limit(10000);
+                $this->fbeHelper->log("collection count:" . (string)count($product_collection));
+
+                $ids = [];
+                foreach ($product_collection as $product) {
+                    $ids[] = $product->getId();
+                }
+            } else {
+                $ids = [];
+            }
+
+            $this->categoryProductIds[$category->getId()] = $ids;
+
+        }
+
+        return $this->categoryProductIds[$category->getId()];
+    }
+
     /**
      * @param Category $category
      * create filter params for product set api
@@ -320,16 +378,17 @@ class CategoryCollection
      */
     public function getCategoryProductFilter(Category $category)
     {
+        /*
         $product_collection = $this->productCollectionFactory->create();
         $product_collection->addAttributeToSelect('sku');
         $product_collection->distinct(true);
         $product_collection->addCategoriesFilter(['eq' => $category->getId()]);
         $product_collection->getSelect()->limit(10000);
         $this->fbeHelper->log("collection count:".(string)count($product_collection));
-
+        */
         $ids = [];
-        foreach ($product_collection as $product) {
-            array_push($ids, "'".$product->getId()."'");
+        foreach ($this->getCategoryProductIds($category) as $productId) {
+            array_push($ids, "'".$productId."'");
         }
         $filter = sprintf("{'retailer_id': {'is_any': [%s]}}", implode(',', $ids));
 //        $this->fbeHelper->log("filter:".$filter);

@@ -54,14 +54,16 @@ class ProcessProductAfterSaveEventObserver implements ObserverInterface
      */
     public function execute(Observer $observer)
     {
-        if ($this->systemConfig->isActiveCatalogSync() == false) {
-            return;
-        }
         /** @var Product $product */
         $product = $observer->getEvent()->getProduct();
         if (!$product->getId()) {
             return;
         }
+
+        if (!$this->systemConfig->isActiveCatalogSyncForProduct($product)) {
+            return;
+        }
+
         $storeId = $product->getStoreId();
         $product->setStoreId($this->fbeHelper->getStore()->getId());
 

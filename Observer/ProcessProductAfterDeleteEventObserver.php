@@ -8,6 +8,7 @@ namespace Facebook\BusinessExtension\Observer;
 use Facebook\BusinessExtension\Helper\FBEHelper;
 use Facebook\BusinessExtension\Model\Product\Feed\Method\BatchApi;
 use Facebook\BusinessExtension\Model\System\Config as SystemConfig;
+use Magento\Catalog\Model\Product;
 use Magento\Framework\Event\Observer;
 use Magento\Framework\Event\ObserverInterface;
 use Magento\Framework\App\Helper\Context;
@@ -51,25 +52,27 @@ class ProcessProductAfterDeleteEventObserver implements ObserverInterface
      */
     public function execute(Observer $observer)
     {
-        if ($this->systemConfig->isActiveCatalogSync() == false) {
+        /** @var Product $product */
+        $product = $observer->getEvent()->getProduct();
+        if (!$product->getId()) {
             return;
         }
 
-        $product = $observer->getEvent()->getProduct();
-
-        if ($product->getId()) {
-
-            try {
-                $this->fbeHelper->log("deleting product: ". $product->getId());
-                $requestData = $this->batchApi->buildProductRequest($product, $method='DELETE');
-                $requestParams = [];
-                $requestParams[0] = $requestData;
-                $this->fbeHelper->log(json_encode($requestParams));
-                $response = $this->fbeHelper->makeHttpRequest($requestParams, null);
-                $this->fbeHelper->log("deletion responses: ".json_encode($response));
-            } catch (\Exception $e) {
-                $this->fbeHelper->logException($e);
-            }
+        if (!$this->systemConfig->isActiveCatalogSyncForProduct($product)) {
+            return;
         }
+
+        try {
+            $this->fbeHelper->log("deleting product: ". $product->getId());
+            $requestData = $this->batchApi->buildProductRequest($product, $method='DELETE');
+            $requestParams = [];
+            $requestParams[0] = $requestData;
+            $this->fbeHelper->log(json_encode($requestParams));
+            $response = $this->fbeHelper->makeHttpRequest($requestParams, null);
+            $this->fbeHelper->log("deletion responses: ".json_encode($response));
+        } catch (\Exception $e) {
+            $this->fbeHelper->logException($e);
+        }
+
     }
 }

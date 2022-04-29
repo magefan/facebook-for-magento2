@@ -50,8 +50,8 @@ class BatchApi
     ) {
         $this->fbeHelper = $helper;
         $this->productRetrievers = [
-            $simpleProductRetriever,
-            $configurableProductRetriever
+            $configurableProductRetriever,
+            $simpleProductRetriever
         ];
         $this->builder = $builder;
     }
@@ -81,6 +81,9 @@ class BatchApi
         $requests = [];
         $responses = [];
         $exceptions = 0;
+
+        $done = [];
+
         foreach ($this->productRetrievers as $productRetriever) {
             $offset = 0;
             $limit = $productRetriever->getLimit();
@@ -92,6 +95,19 @@ class BatchApi
                 }
 
                 foreach ($products as $product) {
+                    if (isset($done[$product->getId()])) {
+                        continue;
+                    }
+                    $done[$product->getId()] = $product->getId();
+
+                    $isActiveCatalogSyncForProduct = $this->fbeHelper->getObject(
+                        \Facebook\BusinessExtension\Model\System\Config::class
+                    )->isActiveCatalogSyncForProduct($product);
+
+                    if (!$isActiveCatalogSyncForProduct) {
+                        continue;
+                    }
+
                     try {
                         $requests[] = $this->buildProductRequest($product);
                     } catch (\Exception $e) {

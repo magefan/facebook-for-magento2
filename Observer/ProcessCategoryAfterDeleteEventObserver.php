@@ -44,7 +44,7 @@ class ProcessCategoryAfterDeleteEventObserver implements ObserverInterface
      */
     public function execute(Observer $observer)
     {
-        if ($this->systemConfig->isActiveCatalogSync() == false) {
+        if (!$this->systemConfig->getActiveCatalogSyncWebsites()) {
             return;
         }
         $category = $observer->getEvent()->getCategory();
